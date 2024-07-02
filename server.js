@@ -1,68 +1,99 @@
-import express, { Request, Response } from 'express';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import express from 'express';
 import multer from 'multer';
-import fs from 'fs';
-import TemplateModel from './models/PDFTemplates';
-
+import mongoose from 'mongoose';
+import cors from 'cors';
+import dotenv from 'dotenv'
 dotenv.config();
 const app = express();
+app.use(cors());
 const PORT = process.env.PORT || 5000;
+const MONGODB_URL = process.env.MONGODBURL;
 
 // Connect to MongoDB
-const connect = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODBURL , {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("Connected to MongoDB!");
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  }
-};
-
-// Middleware for file upload (Multer)
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname);
-  }
+mongoose.connect(process.env.MONGODBURL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => {
+  console.log('Connected to MongoDB');
+})
+.catch((error) => {
+  console.error('MongoDB connection error:', error);
+  process.exit(1); // Exit process with failure
 });
-const upload = multer({ storage });
 
-// POST endpoint for file upload
-app.post('/upload', upload.single('file'), async (req, res) => {
+const PDFTemplateSchema = new mongoose.Schema({
+  filename: { type: String, required: true },
+  contentType: { type: String },
+  file: { type: Buffer, required: true },
+}, {
+  timestamps: true // Automatically adds createdAt and updatedAt fields
+});
+const PDFTemplate = mongoose.model('NewCollection', PDFTemplateSchema);
+
+// Multer storage configuration
+const storage = multer.memoryStorage(); // Store files in memory as Buffer
+
+const upload = multer({ storage: storage });
+
+// POST endpoint to handle PDF file upload
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
-    const { name } = req.body;
-
-    // Check if req.file is defined
     if (!req.file) {
       return res.status(400).send('No file uploaded.');
     }
-
-    const fileBuffer = fs.readFileSync(req.file.path);
-    const template = new TemplateModel({
-      name,
-      file: fileBuffer
+    const newPDFTemplate = new PDFTemplate({
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+      file: req.file.buffer,
     });
-    await template.save();
-
-    // Optional: Remove the uploaded file from the filesystem after saving to database
-    fs.unlinkSync(req.file.path);
-
-    res.status(200).send('File uploaded successfully.');
+    await newPDFTemplate.save();
+    res.status(201).json({ message: 'File uploaded successfully.' });
   } catch (error) {
     console.error('Error uploading file:', error);
-    res.status(500).send('Error uploading file.');
+    res.status(500).send('Server error while uploading file.');
   }
 });
 
-// Start server
+app.get('/api/upload/:filename', async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const template = await PDFTemplate.findOne({ filename: filename });
+    if (!template) {
+      return res.status(404).json({ message: 'File not found.' });
+    }
+    res.set('Content-Type', template.contentType);
+    res.send(template.file);
+  } catch (error) {
+    console.error('Error retrieving file:', error);
+    res.status(500).send('Server error while retrieving file.');
+  }
+});
+
+app.get('/api/upload', async (req, res) => {
+  try {
+    // Query MongoDB to find all documents
+    const templates = await PDFTemplate.find();
+
+    // Map templates to include metadata and file content
+    const files = templates.map(template => ({
+      filename: template.filename,
+      contentType: template.contentType,
+      file: template.file.toString('base64') // Convert Buffer to base64 string
+    }));
+
+    res.json(files);
+
+  } catch (error) {
+    console.error('Error retrieving files:', error);
+    res.status(500).send('Server error while retrieving files.');
+  }
+});
+
+
+
+
+// Start the server
 app.listen(PORT, () => {
-  connect();
   console.log(`Server is running on http://localhost:${PORT}`);
 });

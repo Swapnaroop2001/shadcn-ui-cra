@@ -29,6 +29,6 @@
   "include": [
     "src",
     "**/*.ts",
-    "**/*.tsx",
+    "**/*.tsx", "server.js",
   ]
 }
