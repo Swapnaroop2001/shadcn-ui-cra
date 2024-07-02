@@ -9,21 +9,6 @@ import { Label } from "./components/ui/label";
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null); // State to store fetched PDF as a File object
-  const [temporaryPdf, setTemporaryPdf] = useState<string>(''); // State to store retrieved PDF URL
-  const [selectedOption, setSelectedOption] = useState<string>('');
-
-  // Function to fetch temporary PDF blob from server
-  const fetchTemporaryPdfAsBlob = async () => {
-    try {
-      const response = await axios.get(`http://localhost:5000/api/upload/${selectedOption}.pdf`, {
-        responseType: 'blob'
-      });
-      return new Blob([response.data], { type: 'application/pdf' });
-    } catch (error) {
-      console.error('Error fetching temporary PDF:', error);
-      throw error; // Propagate the error further if needed
-    }
-  };
 
   // Function to handle user file input change
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -32,10 +17,10 @@ function App() {
       setFile(selectedFile);
     }
   };
+  console.log(file)
 
   // Function to handle template selection change
   const handleSelectChange = (option: string) => {
-    setSelectedOption(option);
     fetchPdfByName(option);
   };
 
@@ -43,7 +28,7 @@ function App() {
   const fetchPdfByName = async (templateName: string) => {
     try {
       const response = await axios.get(`http://localhost:5000/api/upload/${templateName}.pdf`, {
-        responseType: 'blob' // Ensure responseType is set to 'blob' to handle binary data
+        responseType: 'blob'
       });
       
       const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -53,36 +38,13 @@ function App() {
       setFile2(pdfFile);
 
       const pdfUrl = URL.createObjectURL(blob);
-      setTemporaryPdf(pdfUrl); // Store temporary URL for display
-
     } catch (error) {
       console.error('Error fetching PDF:', error);
-      // Optionally handle error (e.g., show error message)
     }
   };
+  console.log(file2)
 
-  // Function to merge PDFs
-  const mergePDFs = async () => {
-    try {
-      if (file && file2) {
-        // Initialize PDFMerger instance
-        const merger = new PDFMerger();
   
-        // Add files to PDFMerger instance
-        // merger.add(await fetchTemporaryPdfAsBlob()); // Add temporary PDF fetched from server
-        merger.add(file); // Add user-selected PDF file
-        merger.add(file); // Add user-selected PDF file
-  
-        // Save merged PDF
-        await merger.save('merged.pdf'); // Save under given name and reset the internal document
-        console.log('Merged PDF created successfully.');
-      } else {
-        console.error('PDFs are missing.');
-      }
-    } catch (error) {
-      console.error('Error merging PDFs:', error);
-    }
-  };
 
   // Function to handle form submission (uploading initial PDF)
   const submitDoc = async (e: React.FormEvent) => {
@@ -101,10 +63,29 @@ function App() {
           "Content-Type": "multipart/form-data"
         }
       });
-      console.log('File uploaded successfully:', response.data);
+      // console.log('File uploaded successfully:', response.data);
     } catch (error) {
       console.error('Error uploading file:', error);
-      // Optionally handle error (e.g., show error message)
+    }
+  };
+
+
+  // Function to merge PDFs
+  const mergePDFs = async () => {
+    try {
+      if (file && file2) {
+        const merger = new PDFMerger();
+        merger.add(file);
+        merger.add(file2); 
+
+        await merger.save('merged.pdf');
+
+        // console.log('Merged PDF created successfully.');
+      } else {
+        console.error('PDFs are missing.');
+      }
+    } catch (error) {
+      console.error('Error merging PDFs:', error);
     }
   };
 
@@ -143,18 +124,6 @@ function App() {
             <Input id="Template" type="file" onChange={handleFileChange} accept='.pdf' multiple required />
           </div>
         </div>
-
-        {temporaryPdf.length !== 0 && (
-          <div className="flex flex-col gap-2 mt-8 items-start text-start">
-            <label htmlFor="temporary-pdf" className="block text-lg font-small">
-              Temporary PDF
-            </label>
-            <div className="border border-dashed border-gray-200 h-auto w-auto p-10">
-              <embed src={temporaryPdf} type="application/pdf" width="100%" height="600px" />
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );

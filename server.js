@@ -3,6 +3,15 @@ import multer from 'multer';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const uploadPath = path.join(__dirname, './uploads');
 dotenv.config();
 const app = express();
 app.use(cors());
@@ -32,9 +41,20 @@ const PDFTemplateSchema = new mongoose.Schema({
 const PDFTemplate = mongoose.model('NewCollection', PDFTemplateSchema);
 
 // Multer storage configuration
-const storage = multer.memoryStorage(); // Store files in memory as Buffer
-
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadPath); // Set destination to uploadPath
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname); // Use original file name
+  }
+});
 const upload = multer({ storage: storage });
+
+// Route to handle file upload
+app.post('/api/upload', upload.single('pdfFile'), (req, res) => {
+  res.status(200).send('File uploaded successfully');
+});
 
 // POST endpoint to handle PDF file upload
 app.post('/api/upload', upload.single('file'), async (req, res) => {
